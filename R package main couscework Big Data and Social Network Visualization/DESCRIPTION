@@ -1,0 +1,27 @@
+Package: package10593795104317421059735710480219
+Type: Package
+Title: Package10593795104317421059735710480219
+Version: 1.0.0
+Author: c(person("Julian", "Blau", email = "julian.blau@postgrad.plymouth.ac.uk", role = c("aut", "cre")),
+             person("Dan", "Buckwell", email = "dan.buckwell@postgrad.plymouth.ac.uk", role = c("aut , "cre)),
+             person("Clint", "Cridland", email = "clint.cridland@postgrad.plymouth.ac.uk", role = c("aut , "cre)),
+             person("Charalampos", "Petrocheilos", email = "charalampos.petrocheilos@postgrad.plymouth.ac.uk", role = c("aut , "cre)))
+Maintainer: Dan Buckwell <dan.buckwell@postgrad.plymouth.ac.uk>
+Description: This package can be used to perform statistical analysis on EU Referendum and 
+    UK baby name data sets. The *referendum_data* set can be used to visualise the 
+    percentage of people voting to leave the EU against the diversity of the area. 
+    The *ukbabyname* data can also be used to visualise the the popularity of 
+    specific names between the years 1996 to 2015.
+License: GPL-2 | GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 3.4.1),
+    dplyr,
+    ggplot2,
+    ukbabynames,
+    scales
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 6.0.1

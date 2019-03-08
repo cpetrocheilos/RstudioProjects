@@ -1,0 +1,1014 @@
+---
+bibliography: MathRep.bib
+csl: harvard.cls
+geometry: margin=0.8in
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhead[R]{MATH501}
+- \fancyfoot[C]{Plymouth University}
+- \fancyfoot[R]{\thepage}
+- \thispagestyle{empty}
+output:
+  pdf_document:
+    citation_package: biblatex
+    fig_height: 4.5
+    fig_width: 6.5
+    latex_engine: xelatex
+    number_sections: yes
+---
+
+\centering
+
+\Huge{MATH501 Modelling and Analytics for Data Science Coursework}
+
+\Large{10480219, 10593795, 10595599}
+
+\vspace{0.5cm}
+
+\large{\today} 
+
+\vspace{-3mm}
+
+\includegraphics[width=\linewidth]{RwordCover.png}
+
+\vspace{3mm}
+
+\LARGE{UNIVERSITY OF PLYMOUTH}
+
+\Large{FACULTY OF SCIENCE AND ENGINEERING}
+
+\large{SCHOOL OF COMPUTING, ELECTRONICS and MATHEMATICS}\linebreak
+
+\raggedright
+
+\clearpage
+
+\thispagestyle{empty}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\tableofcontents
+
+\newpage
+
+```{r setup, include = FALSE}
+require("knitr")
+knitr::opts_chunk$set(echo= TRUE,comment = "#", message = FALSE, warning = FALSE) 
+```
+
+```{r, echo=FALSE, results='hide', message=FALSE, include=FALSE}
+library(ggplot2) # for professional graphs
+library(dplyr)   # for data manipulation
+library(scales)  # works with ggplot2 to improve graphs
+library(class)   # for the KNN method
+library(MASS)    # for the LDA and QDA
+library(tree)    # for decision trees
+library(readr)   # to read csv files
+library(tidyr)   # to use the gather function
+library(knitr)   # package for dynamic report 
+library(R2jags)  # package we use to run the Bayesian framework simulation
+library(ggmcmc)  # package in order to convert to ggs the Bayesian models for better plots 
+library(gridExtra) # Packages to create grid plots
+library(grid)
+
+library(RefManageR) # Package we use to create the references at the end of the report
+#*** NB you may need to install this library to your own machine *****
+# install.packages("RefManageR" ,repos = "http://www.stats.bris.ac.uk/R/")
+
+# Set up your working directory in order to load the files of the data needed to run the file
+# include the image file and the data sets
+setwd <- "D:\\MATH501\\MATH501 Coursework-20180221"
+earthquake <- read.csv("earthquake.txt", sep="")
+shop_data <- read_csv("Shops_Data.csv")
+
+attach(earthquake) # make all the columns vectors
+attach(shop_data)
+
+```
+
+\newpage
+
+#Machine Learning Task
+## General Information
+
+The given dataset is named __earthquakes.txt__, which contains information about seismological events. There are three variables in this dataset: \newline
+-- _popn_ : which distinguishes between whether or not each event is an __earthquake__ or a __nuclear explosion__ . This will be the factor for the classification. \newline
+-- _body_ : which contains __body wave magnitude__ (m_b). This is the magnitude of the wave that travels throught the interior of the earth. \newline
+-- _surface_ : which contains __surface wave magnitude__ (Ms). This is the magnitude of the wave that travels along the Earth's surface.
+
+The dataset contains 30 observations, 21 of which are confirmed as earthquakes and 9 are nuclear explosions. Graphed below is a visual representation of the data classified with different colours. Earthquakes are in red and nuclear explosions are in blue. Below is the scatter plot of the data.
+
+```{r, echo = FALSE , message = FALSE , include = TRUE}
+
+ggplot(earthquake , aes(x = body , y= surface,col = popn))+
+  geom_point(size = 3.5)+
+  labs(title = "Earthquakes and Explosion Data", x = "Body-wave Magnitude (mb)",y = "Surface-wave Magnitude (Ms)",
+       col = "" )+
+  theme(legend.position = "bottom")+
+  scale_color_manual(labels = c("Earthquake", "Nuclear Explosion"),values = c("red", "blue"))
+```
+
+\newpage
+
+- We build the colours and grid here to help us build the classification rules on the scatterplots for the KNN and QDA Analysis
+
+```{r, echo = TRUE, results='hide', message=FALSE, include=TRUE}
+# Here we produce a vector and give a default colour blue and 
+# then change the colour for the earthquake observation to red 
+def.col <- rep("blue",30) # vector of colours
+def.col[popn == "equake"] <- "red" # red colour for the earthquake variable
+
+# We define a grid of points that covers the entire range of the 
+# data clasifier on this grid in order to use it for QDA and KNN 
+len <- 40
+xp <- seq(4,8,length = len)
+yp <- seq(0,10,length = len)
+xygrid <- expand.grid(body = xp , surface = yp)
+```
+
+## QDA Discrimanant Analysis
+
+The Quadratic Discriminant Analysis is a parametric method that assumes a quadratic rule can be used to classify the dataset. To calibrate this, a curve is drawn that separates the grid, which can be used to discriminate between different events.
+
+- Firstly the QDA model fitted using the __MASS__ library and the results are as follows:
+
+```{r , echo=TRUE,results= TRUE }
+def.qda <- qda(popn ~ body + surface , data = earthquake)
+def.qda
+```
+
+- The next step is to use the predict function in order to calculate the posterior and the class for the classification: 
+
+```{r , echo =TRUE , include = TRUE}
+# Classify the point from the grid using the predict funcion
+grid.qda <- predict(def.qda , xygrid)
+
+# Preparing the colour of the grid to be plotted
+col1 <- rep("lightblue",len*len)
+for (i in 1:(len*len)) if(grid.qda$class[i] == 'equake') col1[i] <- "indianred1" 
+
+# Preparing the boundary point subracted from the earthquake from explosion posterior
+zp <- grid.qda$post[ ,1] - grid.qda$post[ ,2]
+```
+\newpage
+- The classification rule can be visualised in the plot below:
+
+```{r, echo = FALSE , message = FALSE , include = TRUE}
+plot(xygrid, col = col1 , main = "QDA classifier",xlab = "Body-wave",ylab = "Surface-wave")
+contour(xp,yp,matrix(zp,len),levels = c(0),add = TRUE , lwd =3)
+points(body, surface,col = def.col , lwd = 2)
+```
+
+- The table called below shows the incorrectly classified observations using the QDA classifier. As per the plot, there is one incorrectly classified earthquake observation
+
+```{r, echo = FALSE , message = FALSE , include = TRUE}
+# Training error for QDA model
+qda.pred <- predict(def.qda) # prediction for the training data
+qda.class <- qda.pred$class # class prediction for training data
+
+qda.tab <- table(qda.class,popn)
+qda.tab
+
+# The overall fraction of incorrectly classified data
+# training error
+qda.test.error <- (qda.tab[1,2]+qda.tab[2,1])/sum(qda.tab)
+qda.test.error
+```
+
+##  KNN Analysis (K-nearest neighbours)
+The K-Nearest Neighbours is a non-parametric method that allows for a rule to be inducted out of the dataset based on a defined number of neighbours (k) for each point in the plane to have.
+
+- Here we build the training matrix of the body and surface predictors in order to use it for the function below.
+
+```{r, echo = TRUE , message = FALSE , results='hide'}
+train.X <- cbind(body , surface) 
+train.X
+
+```
+
+\newpage
+- We create a function that automaticaly build the KNN plot based on the selected K, which is the only variable of the function. We use the __knn__ function from the __MASS__ library to do this as illustrated below:
+
+```{r, echo = TRUE , message = FALSE, results='hide'}
+knn.plot <- function(k){ 
+# Create the function which uses only one variable K
+#
+# Fitting the KNN model using the knn function from the MASS 
+# library and k equal to k variable
+def.knn <- knn( train = train.X, # Matrix containing predictors 
+                                 #for training data
+                test = train.X,# Matrix containing the data which 
+                               # we wish to make predictions with
+                cl = popn, # This vector contains the factor(labels)
+                           # of the training observations
+                k = k)
+#The next step, is to build the grid colouring for the specific k from the 
+#function and plot the results:
+
+# We represent the two classes as 1 (popn = earthquake) and 0
+# (popn = explotion) for plotting the class boundary
+cl <- rep(0, 30); cl[popn == 'equake'] = 1; cl <- as.factor(cl)
+# We classify the points in the grid using the KNN function
+grid.knn <- knn( train = train.X, # Matrix of containing predictors 
+                                  # for training data
+                 test = xygrid, # Using the grid that we have 
+                                #produced above
+                 cl = cl, # as the vector contains the factor we created above
+                 k = k)
+# We prepare the vector of colours that we use for the plot
+col1 <- rep("lightblue", len*len) 
+for (i in 1:(len*len)) if(grid.knn[i] == "1") col1[i] <- "indianred1"
+#
+# Create the plot for each value of k
+plot <- plot(xygrid, col = col1, main = paste("KNN classifier with K=",(k)),
+             xlab = "Body-wave",ylab = "Surface-wave") 
+boundry<-contour(xp, yp, matrix(grid.knn, len), levels = 0.5,
+                 add = TRUE, lwd = 2)
+points <-points(body,surface, col = def.col)
+#
+# Return the plot and the def.col variable in order to build the
+# table of the classifed observation 
+return(list(plot,boundry,points))
+}
+```
+
+\newpage
+- We create plots for K = 1, 3, 5, 7 to predict __popn__ the scatter plot __body__ against __surface__ using the __KNN_plot__ function.
+
+```{r, echo= FALSE , resutls = TRUE, message= FALSE,comment=FALSE,fig.height=7.3,fig.width=12}
+par(mfrow=c(1,2))
+p1 = knn.plot(1)
+p2 =knn.plot(3)
+```
+
+```{r, echo= FALSE , resutls = TRUE, message= FALSE,comment=FALSE,fig.height=7.3,fig.width=12}
+par(mfrow=c(1,2))
+p3 =knn.plot(5)
+p4 =knn.plot(7)
+```
+
+\newpage
+- We use the following function to calculate the errors based on the knn rules and then run a for loop to load all the possble errors
+
+```{r, echo = TRUE , message = FALSE, results='hide'}
+# Build a function that applies the knn rule and calculatea the 
+#training error from the table of classifiers
+test.training.error <- function(k){
+  def.knn <- knn( train = train.X, test = train.X, cl = popn, k = k)
+  tab <- table(def.knn, popn)
+  error <- (tab[1,2] + tab[2,1]) / 30 
+  return(error)
+}
+# Creating a variable to hold the errors and then using the 
+# function to calculate the errors
+knn.training.errors <- rep(0,29)
+for (i in 1:29) knn.training.errors[i] <- test.training.error(k = i) 
+# Build an empty error vector
+knn.training.errors <- rep(0,30)
+# Run the function in a for loop to load all the possible errors
+for (i in 1:length(knn.training.errors)) 
+  knn.training.errors[i] <- test.training.error(k = i) 
+
+```
+
+- We plot the errors using in order to see visualize the training errors:
+
+```{r, echo= FALSE , resutls = TRUE, message= FALSE,comment=FALSE,fig.height=6,fig.width=11}
+par(mfrow=c(1,2))
+p5 <- plot(knn.training.errors[1:20],xlab = "K",ylab = "Test error") 
+p6 <- plot(knn.training.errors[1:11],xlab = "K",ylab = "Test error")
+```
+
+The graph shows us a visualisation of the overall training errors for classification rule value k from 1-20 on the left plot and on right plot 1 to 11.
+\newpage
+
+## Decision Trees
+
+- Firstly, using the __tree__ library the model is fitted for out dataset
+
+```{r, echo = TRUE , message = FALSE, results= 'hide'}
+tree.fit <- tree(popn ~ body + surface , data = earthquake) 
+```
+
+- Then, we visualise the classification with the fitted classification tree illustrated below: 
+
+```{r, echo = FALSE , message = FALSE, results=TRUE}
+plot(tree.fit)
+text(tree.fit,pretty = 0)
+```
+
+- Next we use the summary function to show the training error for the classification
+
+```{r, echo = FALSE , results=TRUE}
+
+summary(tree.fit)
+
+# Predict to see the table of incorrectly classified points
+tree.pred <- predict(tree.fit,type= "class")
+tab.tree <- table(tree.pred,popn)
+tab.tree
+
+# Visualising the training errors 
+tree.test.error <- (tab.tree[1,2]+tab.tree[2,1])/sum(tab.tree)
+tree.test.error
+```
+\newpage
+- Finally, we produce the result of the classification tree on a scatter plot
+
+```{r, echo = FALSE , results = TRUE, message = FALSE, comment=FALSE}
+# Way to plot the tree rules in a scatter plot
+popnCol <- rep("blue",30)
+popnCol[earthquake$popn=="equake"] <- "red"
+
+plot(x = earthquake$body , y = earthquake$surface ,col= popnCol, pch = 16 , cex = 1.5,
+     main = "Tree scatter plot with Classification Borders",
+     xlab = "Body wave",ylab = "Surface wave")
+legend("topleft", legend=c("Earthquake", "Explosion"),
+       col=c("red", "blue"),  pch = 16 ,cex=1)
+partition.tree(tree.fit, add = TRUE, cex = 2)
+```
+
+__Confusion matrix__ reveals that two explosions are classified incorrectly by the classification tree. and the training error was `r tree.test.error` which is not extremely high. From the scatter plot we see a clear classification rule and we may be able to modify the explosions border in order to have better results. For now we can say that the model fits well 
+
+## Leave-one out Cross Validation (LOOCV)
+
+Cross validation is a technique used in order to verify and test the errors by systematically testing the dataset, leaving one observation out each time. 
+
+### Cross Validation for QDA
+
+```{r}
+n <- nrow(earthquake)
+# Here we build predictor array with 30 values where all the values are equake
+cv.predictions.qda <- rep("equake", n)
+# We use a for loop to just remove one row from the data frame at a time and
+# We hold the data for the class in the cv.predictions.qda
+for(i in 1:n){
+  fit.qda <- qda(popn ~ . , data = earthquake[-i, ])
+  hold <- predict(fit.qda ,newdata = earthquake[i,] , type = "class")
+  cv.predictions.qda[i] <- hold$class
+}
+# We build a confusion table in order to check the classification rule
+tab.cv.qda <- table(cv.predictions.qda, popn)
+tab.cv.qda
+# We calculate and display the cross validation error
+cv.qda.error = (tab.cv.qda[1,2] + tab.cv.qda[2,1]) / sum(tab.cv.qda) 
+cv.qda.error
+```
+
+### Cross Validation for KNN
+Use __knn.cv__ function from __class__ library which  automatically crossvalidates for each selected k. For that reason we build the __cv.training.error__ function to calculate and store the cross validation error.
+
+```{r}
+
+cv.training.error <- function(k){
+  # This function return the cross validation error for each selected k
+  
+  # Use knn.cv function from class library which does this automatically 
+  # cross validation for each selected k
+  knn.cv.fit <- knn.cv(train.X , popn , k = i, l = 0, prob = TRUE)
+  tab.knn <- table(knn.cv.fit,popn)
+  cv.knn.error = (tab.knn[1,2] + tab.knn[2,1]) / sum(tab.knn)
+  return(cv.knn.error)
+}
+# We produce an array which hold for each k the cross validation error
+cv.knn.store <- rep(0,29)
+set.seed(800)
+for(i in 1:29) cv.knn.store[i] <- cv.training.error(i)
+```
+
+\newpage
+- Visualising the results of the cross validation errors:
+
+```{r, echo= FALSE , resutls = TRUE, message= FALSE,comment=FALSE,fig.height=6,fig.width=11}
+# Plot the results using plot base function
+par(mfrow=c(1,2))
+p7<-plot(cv.knn.store[1:20],xlab = "K",ylab = "Cross validation error")
+p8<-plot(cv.knn.store[1:10],xlab = "K",ylab = "Cross validation error")
+```
+
+### Cross Validation for Classification Trees
+
+```{r}
+# We buld the cv.prediction.tree to save the values
+cv.predictions.tree <- rep('equake', nrow(earthquake))
+# We build the for loop to calculate the classification using tree function
+for(i in 1:n) {
+  tree.fit <- tree(popn ~ ., data = earthquake[-i, ])
+  cv.predictions.tree[i] <- predict(tree.fit, newdata = earthquake[i,], type = "class")
+}
+# We build a confusion table in order to check the classification rule
+tab.cv.tree <- table(cv.predictions.tree, popn) 
+tab.cv.tree
+# Represent cross validation error
+cv.tree.error = (tab.cv.tree[1,2] + tab.cv.tree[2,1]) / sum(tab.cv.tree) 
+cv.tree.error  
+```
+
+## Conclusions
+
+\begin{center}
+\begin{tabular}{|c|c|r|}\hline 
+Method Type & Test Error & CV Error \\ \hline
+QDA & `r qda.test.error ` & `r cv.qda.error` \\
+Tree & `r tree.test.error` & `r cv.tree.error` \\ 
+KNN(k=1) & `r knn.training.errors[1]` & `r cv.knn.store[1]` \\ 
+KNN(k=3) & `r knn.training.errors[3]` & `r cv.knn.store[3]` \\
+KNN(k=5) & `r knn.training.errors[5]` & `r cv.knn.store[5]` \\
+KNN(k=6) & `r knn.training.errors[6]` & `r cv.knn.store[6]` \\
+KNN(k=7) & `r knn.training.errors[7]` & `r cv.knn.store[7]` \\ \hline
+\end{tabular}
+\end{center}
+
+We can see that the difference between the test errors and the cross validation errors. Because the test error is an unbiased indicator of the quality of the classifier and the test set is too small we can not say that is a very good measurment of the error. For that reason we use LOOCV error which is more accurate than the test error because it is based on n-1 data points. Based on these two errors we can see that the best fitted models are QDA and KNN which gives the same CV error while the tree give a larger error. Based on these two types of errors we conclude that the KNN analysis it was going to be more accurate ,if we use k = 1, 7, for this data set. On the other hand, we have two different types of classification - parametric and non-parametric. Parametric classification is usually less complex and more efficient, requiring less training data and can even work well if the fit to the data is not perfect. Because of this, it is more suitable for small, simple datasets such as this one. However, the limited complexity means that the method is more suited to simpler problems such as this one. 
+
+By contrast, non-parametric methods are far more flexible and offer better power and performance, which produced the lowest test errors in the KNN analysis performed. However, non-parametric methods require more training data to have safe assumptions and there is a risk of overfitting and can be slower as there are more training parameters. For all these reasons and by comparing the test and training erros, we believe that the best fitted classification model is the parametric Quadratic Discriminant Analysis for this dataset.
+
+\newpage
+# Bayesian Statistics Task
+
+## First Sub-Task
+
+The given data named __Shops_Data.csv__, which contains information adout a retail chain which has shops in ten cities. In this data are four different columns: \newline
+-- _City_ : which contains diferent __Number__ of the city as a label.  \newline
+-- _Sales_ : which contains data on the __Annual Sales (units £'000s)__.\newline
+-- _Advertising_ : which contains __advertising expenditure (units £'000s)__.\newline
+-- _Population_ : which contains __City Population (units '000s)__.
+
+### To begin with, we build a scatter plot containing the sales as the dependent variable against advertising and population as our independent variables
+
+```{r, echo = FALSE ,warning = FALSE ,message = FALSE, results=TRUE}
+# Build long data with gather from tidyr library to prepare the scatter plot.
+shop_data_long <- gather(shop_data,"Type" , "x" ,2:3)
+
+# Here we represent the data in a scatter plot and and fit the linear model line
+ggplot(shop_data_long, aes(x = x, y = Sales, col = Type))+
+  geom_point()+
+  facet_grid(~Type, scales = "free")+
+  geom_smooth(method = "lm",se = TRUE )+
+  theme(legend.position = "bottom")+
+  labs(y = "Sales (in £'000s)",x = "", col = "Type of Sales")
+```
+
+\newpage
+### To have a better visualisation of the model we fitting this in a 3D with the coresponding plane which can explain a visual interpretation of the parameter $\beta_1$
+
+
+![3D model wirth the fitted model](3Dmodel.png)
+
+The parameter $\beta_1$ is the regression slope for advertising. What it tells us is by what magnitude our dependent variable, sales, should increase by if we were to increase advertising by one unit. From the fitted model below, we know this value of $\beta_1$ to be 2.0949. So if the firm were to increase its advertising spending by £1,000 then they would expect to see an increase of sales of £2,094.90
+
+\newpage
+### We fit this model in the frequentist framework and report $\beta_0$, $\beta_1$, and $\beta_2$ and perform a hypothesis test on whether advertising has an effect on sales
+
+```{r,echo=FALSE}
+
+# We fit the model using the lm function
+m <- lm(Sales ~ Advertising + Population, data = shop_data)
+
+# We estimate the parameters using the summary function
+sum_represent <-summary(m)
+
+```
+- Table of the coefficients and the $R^2$ value.
+
+```{r ,echo= TRUE, results= TRUE}
+sum_represent$coefficients 
+sum_represent$r.squared
+```
+- Table of the 95% Confidence intervals for $\beta_0$ and $\beta_1$.
+
+```{r ,echo= TRUE, results= TRUE}
+confint(m)
+```
+The frequentist model run from the code above gives us the values of the coefficients. For $\beta_0$, the intercept, we have a value of `r summary(m)$coefficients[1,1]`. $\beta_1$ has the value of `r summary(m)$coefficients[2,1]`, so as above, for every increase in the level of advertising by £1,000, sales increase by £2,094.90. $\beta_2$ has the value of `r summary(m)$coefficients[3,1]`, so for every increase in population of 1,000, sales increase by £693.30. The $R^2$ coefficient of determination is `r summary(m)$r.squared`, which means that 97.96% of the variability in sales is explained the variables in the model. Because this is close to 1, we can say that is a well fitted model. 
+
+The significance level given is 95% which corresponds to our willingness to make a type I error, which is our alpha of 0.05. We fix the type 1 error probability here, and the test fixes the type 2 error which is the power of the test. For $\beta_1$, the p-value is `r summary(m)$coefficients[2,4]` which is less than our value of alpha as 0.05. As this value is less than our alpha, we can conclude that the slope is signficant. The 95% confidence interval for $\beta_1$ is the range of values for which there is a 95% probability the true value of the slope will lie within, which for advertising is `r confint(m)[2,1]` to `r confint(m)[2,2]`.
+
+\newpage
+### We write jags/BUGS code to perform the above model using the Bayesian framework
+
+\begin{center}
+$Sales_i = \beta_0 + \beta_1 Advertising_i + \beta_2 Population_i + \epsilon_i, \, i = 1,\ldots, n \mbox{ where n = 10}$ \\
+$\epsilon_i \sim N(0, precision~~~\tau ) \, \mbox{ independently}$\\
+$\beta_0 \sim N(0, precision~~~ 0.0001)$\\
+$\beta_1 \sim N(0, precision ~~~0.0001)$\\
+$\beta_2 \sim N(0, precision~~~ 0.0001)$\\
+$\tau \sim Gamma(shape = 0.001, rate = 0.001)$ \\
+$\mbox{standard deviation} ~~~ \sigma = \frac{1}{\tau}$
+\end{center}
+
+- We create a function named __Bayesian regression model__ to run the simulation using the __R2jags__ library. After that we use __ggmcmc__ to convert the the fitted model and prepare a __ggs density__ plot for $\beta$ family.
+
+```{r ,echo=TRUE,results=FALSE}
+Bayesian_regression_model <- function(){
+  #
+  # Data model or likelihood part
+  #
+  for(i in 1:n){ # n is the sample size (number of data points)
+    #
+    y[i] ~ dnorm(mu[i], tau) # Parametrised by the precision tau = 1 / sigma^2
+    mu[i] = beta_0 + beta_1 * x1[i] + beta_2 * x2[i]
+    #
+  }
+  #
+  # Priors
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+  beta_2 ~ dnorm(0.0, 1.0E-4) # Prior on beta_2 is normal with low precision
+  tau ~ dgamma(1.0E-3, 1.0E-3) # Prior on tau is gamma with small shape and rate parameters
+  #
+  # Definition of sigma: it's completely determined by tau
+  #
+  sigma <- 1.0 / sqrt(tau)
+}
+```
+
+```{r,echo=FALSE,results=FALSE}
+
+# Prepare the variable to input to the model
+n<- 10
+y <- shop_data$Sales
+x1 <- shop_data$Advertising
+x2 <- shop_data$Population
+
+data_Regression <- list("x1","x2","y","n")
+
+Bayesian_Regression <- jags(data = data_Regression, 
+                            parameters.to.save = c("beta_0", 
+                                                   "beta_1",
+                                                   "beta_2",
+                                                   "tau", 
+                                                   "sigma"), 
+                            n.iter = 100000, # (Related to) size of sample required from the   posterior
+                            n.chains = 3, # Here, we repeat our sampling from the posterior three times
+                            model.file = Bayesian_regression_model)
+
+# we transform the to mcmc file to have better visualization
+Bayesian_Regression.mcmc <- as.mcmc(Bayesian_Regression)
+#
+# Create a ggs object
+#
+Bayesian_Regression.ggs <- ggs(Bayesian_Regression.mcmc)
+
+```
+
+```{r , echo=FALSE, results=TRUE,fig.height=5.9,fig.width=12}
+ggs_density(Bayesian_Regression.ggs, family = "^beta")
+```
+
+The posterior probability density functions illustrated are similar in each chain for each parameter. We do not see significant changes in the mean in each chain for each beta. When we run our priors, we take a very low precision in order to simulate our model with great variance. This allows the tails to be amplified lengthways in order to better understand the model. This way, predictions can be the most accurate. 
+
+### We now calculate the 95% credible interval for $\beta_1$ and illustrate the interval numercal and with __caterpillar__ plot:
+
+```{r,echo=FALSE,results=TRUE,comment=FALSE,fig.height=3.9,fig.width=12}
+# grafical presentation of the b1
+ggs_caterpillar(Bayesian_Regression.ggs,thick_ci = c(0.05, 0.95),family = "^beta_1")
+
+```
+
+
+```{r,echo=FALSE,results=TRUE}
+# Accesing part of the results
+Bayesian_Regression$BUGSoutput$summary[c("beta_1"),
+                                       c("mean","sd","2.5%","97.5%","Rhat")] 
+```
+
+The credible interval gives a 'natural' probability of 95% that the value for $\beta_1$ lies within the given interval. By contrast, the confidence interval states that the value of $\beta_1$ lies within the interval for 95% of trials. Recall the confidence interval calculated above is `r confint(m)[2,1]` to `r confint(m)[2,2]`. The credible interval for $\beta_1$ shown above is 0.572856542 to 3.61188762, which is somewhat wider than for the frequentist analysis. We know that the Bayesian framework tends to give us a credible interval smaller than the frequentist confidence intervals. However, this is not the case in this model, which could be because there may be other variables that the model has not captured that could give us more accurate results under the Bayesian framework.
+
+### Using the Bayesian model, we can make a  predicted credible interval for a city of 200,000 people with a £30,000 advertising budget in a similar city. We include all of the above code with two extra lines at the end to make our predictions and we simulate the model again with the __jags__ function.
+
+
+```{r,echo=TRUE,results=FALSE}
+Bayesian_regression_model_with_prediction <- function(){
+  #
+  # Data model or likelihood part
+  #
+  for(i in 1:n){ # n is the sample size (number of data points)
+    #
+    y[i] ~ dnorm(mu[i], tau) # Parametrized by the precision tau = 1 / sigma^2
+    mu[i] = beta_0 + beta_1 * x1[i] + beta_2 * x2[i]
+    #
+  }
+  #
+  # Priors
+  #
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+  beta_2 ~ dnorm(0.0, 1.0E-4) # Prior on beta_2 is normal with low precision
+  tau ~ dgamma(1.0E-3, 1.0E-3) # Prior on tau is gamma with small shape and rate parameters
+  #
+  # Definition of sigma: it's completely determined by tau
+  #
+  sigma <- 1.0 / sqrt(tau)
+  #
+  # We add x new to give us the power to make the prediction
+  #
+  mu_new <- beta_0 + beta_1 * x1_new + beta_2 * x2_new # Value of mu at x_new
+  #
+  y_new ~ dnorm(mu_new, tau) # New value of y at x_new
+  #
+}
+```
+
+```{r, echo=FALSE ,results=FALSE}
+#
+# # Prepare the variable to input to the model x1_new and x2_new
+#
+n<- 10
+y <- shop_data$Sales
+x1 <- shop_data$Advertising
+x2 <- shop_data$Population
+x1_new <- 200
+x2_new <- 30
+#
+data_Regression_predict <- list("x1","x2","y","n", "x1_new","x2_new")
+#
+# Perform Bayesian inference
+#
+Bayesian_Regression_predict <- jags(data = data_Regression_predict, 
+                                    parameters.to.save = c("beta_0", "beta_1","beta_2","tau", "sigma","mu_new","y_new"), 
+                                    n.iter = 100000, 
+                                    n.chains = 6,
+                                    model.file = Bayesian_regression_model_with_prediction)
+
+
+
+
+# Transoform the to mcmc file to have better visualization
+Bayesian_Regression_predict.mcmc <- as.mcmc(Bayesian_Regression_predict)
+
+
+#
+# Create a ggs object
+#
+Bayesian_Regression_predict.ggs <- ggs(Bayesian_Regression_predict.mcmc)
+
+```
+
+```{r , echo=FALSE,results=TRUE}
+
+gg_caterpillar_mu <- ggs_caterpillar(Bayesian_Regression_predict.ggs,family = "^mu_new")
+
+gg_caterpillar_ynew <- ggs_caterpillar(Bayesian_Regression_predict.ggs,family = "^y_new")
+
+grid.arrange(gg_caterpillar_mu , gg_caterpillar_ynew, nrow = 2)
+```
+Numeric representation of the $\beta_1$, $\beta_2$, $y_{new}$, $mu_{new}$ credible intervals
+```{r, echo=FALSE, results=TRUE}
+
+Bayesian_Regression_predict$BUGSoutput$summary[c("beta_1","beta_2","y_new","mu_new"), # Rows 
+                                               c("mean","sd","2.5%", "97.5%")] # Columns
+
+
+```
+
+These intervals, applicable assuming ceteris paribus, or all other factors remaining constant between the two cities, predict that the sales volume in this new city will be approximately 
+`r Bayesian_Regression_predict$BUGSoutput$summary[8,1]`. We are 95% confident that the sales will be between [lower bound ] and [upper bound]. We can conclude that advertising and population have positive effect on sales revenue. Using this model, with the city size and advertising budget, there is a good prospect for return on investment. Sales are more sensistive to population than advertising as seen by the coefficients, and for that reason there is a margin to spend less on advertising with no significant difference in results. We would also recommend being aware of the scope of the recommendatons of this model, as there may be other variables that have not been measured or catpured in the model that may affect sales revenue. We suggest before taking this decision that the manager should check the composition/demographics/preferences of the local population to take into account factors that are not captured in the model.
+
+\newpage
+## Second Subtask
+
+Twenty people were interviewed in Plymouth and asked whether they thought the UK economy would be stronger at the end of the year. The responses, either 'Yes' or 'No' and the respondent's age are given in the datset to be analysed. 
+
+\begin{center}
+\begin{tabular}{|c|c|}\hline
+Response & Age (years) \\  \hline
+Yes &  38 \\
+Yes & 42 \\
+No & 56 \\
+No & 68 \\
+No & 40 \\
+Yes & 41 \\
+No & 74 \\
+Yes & 37 \\
+Yes & 50 \\
+Yes & 40 \\
+Yes & 33 \\
+Yes & 42 \\
+No & 54 \\
+No & 48 \\
+No & 60 \\
+Yes & 35 \\ 
+Yes & 37 \\
+Yes & 43 \\
+Yes & 44 \\
+No & 65 \\ \hline 
+\end{tabular}
+\end{center}
+
+- We are loading the above data from the table in __R__.
+
+```{r,echo= TRUE , results = 'hide'}
+# Insert the data
+responce <- c("Yes","Yes","No","No","No","Yes","No",
+              "Yes","Yes","Yes","Yes","Yes","No","No",
+              "No","Yes","Yes","Yes","Yes","No")
+age <- c(38,42,56,68,40,41,74,37,50,40,33,42,54,
+         48,60,35,37,43,44,65)
+
+
+# Create a numeric vector containing the 0 if responce is NO and 
+# 1 if response is Yes
+responce_prob <- rep(1,20)
+for(i in 1:20) if(responce[i] == "No")responce_prob[i]<-0
+
+# Create a data frame for the data 
+survey <- data.frame(responce,age,responce_prob)
+
+```
+
+\newpage
+### We are write BUGS code for the logistic regression shown below:
+
+\begin{center}
+$\log{\frac{p_i}{1-p_i}} = \eta_i$ \\
+$\eta_i = \beta_0 + \beta_1~Age_i$\\
+$\beta_0 \sim N(0, precision ~~~0.0001$\\
+$\beta_1 \sim N(0, precision ~~~0.0001)$\\
+$\mbox{where }~~ Response_i \sim dbin(p_i, 1)$
+\end{center}
+
+
+```{r ,echo=TRUE,results='hide'}
+Bayesian_binary_logistic_model <- function(){
+  #
+  # Define the likelihood part of the model
+  #
+  for(i in 1:n_obs){
+    #
+    y[i] ~ dbin(p[i],1) 
+    #
+    # Link function
+    #
+    # logit(p) in BUGS give log(p / (1 - p))
+    #
+    # Linear predictor
+    #
+    logit(p[i]) <- eta[i]
+    #
+    eta[i] <- beta_0 + beta_1 * x[i]
+  }
+  #
+  # Specify the prior distributions on the unknown parameters
+  #
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+}
+```
+
+\newpage
+- We create density plots __ggs_density__ using library __ggmcmc__ for $\beta_0$ and $\beta_1$.
+
+```{r, echo=FALSE , results='hide'}
+# *** Data Preparation ***
+#
+n_obs <- length(survey$age)
+
+#
+y <- survey$responce_prob
+
+#
+x <- survey$age
+
+#
+data_binary_logistic <- list("n_obs", "y", "x")
+
+#
+Bayesian_binary_logistic <- jags(data = data_binary_logistic, 
+                                 parameters.to.save = c("beta_0", 
+                                                        "beta_1",
+                                                        "p"), 
+                                 n.iter = 100000, 
+                                 n.chains = 3,
+                                 model.file = Bayesian_binary_logistic_model)
+
+
+Bayesian_binary_logistic.mcmc <- as.mcmc(Bayesian_binary_logistic)
+#
+# Convert this to a ggs object
+#
+Bayesian_binary_logistic.ggs <- ggs(Bayesian_binary_logistic.mcmc)
+
+```
+
+```{r ,echo=FALSE , results = TRUE}
+
+# Inference about beta_0
+# pi(beta_0 | data)
+#
+ggs_density(Bayesian_binary_logistic.ggs, family = "^beta")
+
+```
+
+The posterior distributions are roughly the same for each chain. $\beta_0$ is our intercept and $\beta_1$ is clearly shown to have negative values, which implies that an increase in age leads to a decrease in probability that the answer about the state of the uK economy will be optimistic. 
+
+\newpage
+### We now modify our code to provide the posterior medians of and 95% credible intervals for the probability that a person aged 18 and a person aged 50 would respond 'Yes':
+
+```{r, echo=TRUE , results='hide'}
+Bayesian_binary_logistic_model_predict <- function(){
+  #
+  # Define the likelihood part of the model
+  #
+  for(i in 1:n_obs){
+    #
+    y[i] ~ dbin(p[i], 1 )
+    #
+    # Link function
+    #
+    # logit(p) in BUGS give log(p / (1 - p))
+    #
+    # Linear predictor
+    #
+    logit(p[i]) <- eta[i]
+    #
+    eta[i] <- beta_0 + beta_1 * x[i]
+  }
+  #
+  # Specify the prior distributions on the unknown parameters
+  #
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+  #
+  # Evaluate the linear predictor at the new value of Dose, called x_new
+  #
+  # we use a for loop in order to predict more than one propabilities
+    for(i in 1:length(x_new)){
+    eta_new[i] <- beta_0 + beta_1 * x_new[i]
+    #
+    # Convert to the probability scale
+    #
+    p_new[i] <- exp(eta_new[i]) / (1 + exp(eta_new[i]))
+    }
+}
+```
+
+\newpage
+- We represent the credible intervals for the $p_{1new}$,$p_{2new}$ using __ggs_caterpillar__ function and a numeric representation:
+
+```{r,echo=FALSE , results= 'hide'}
+# *** Data Preparation ***
+#
+n_obs <- length(survey$age)
+#
+y <- survey$responce_prob
+
+#
+x <- survey$age
+
+#
+x_new <- c(18,50)
+
+data_binary_logistic2 <- list("n_obs", "y", "x", "x_new")
+#
+
+Bayesian_binary_logistic_predict <- jags(data = data_binary_logistic2, 
+                                 parameters.to.save = c("beta_0", 
+                                                        "beta_1", 
+                                                        "p", 
+                                                        "p_new"), 
+                                 n.iter = 100000, 
+                                 n.chains = 3,
+                                 model.file = Bayesian_binary_logistic_model_predict)
+
+
+# Convert the jags output to an MCMC object
+#
+Bayesian_binary_logistic_predict.mcmc <- as.mcmc(Bayesian_binary_logistic_predict)
+#
+# Convert this to a ggs object
+#
+Bayesian_binary_logistic_predict.ggs <- ggs(Bayesian_binary_logistic_predict.mcmc)
+```
+
+```{r,echo=FALSE , results= TRUE,fig.height=5,fig.width=12}
+#
+# Inference about beta_0
+# pi(beta_0 | data)
+#
+
+ggs_caterpillar(Bayesian_binary_logistic_predict.ggs, family = "^p_new")
+Bayesian_binary_logistic_predict$BUGSoutput$summary[c("p_new[1]","p_new[2]"),
+                                                    c("mean","sd","2.5%","97.5%")]
+#
+```
+From the results we can clearly see that younger people are generally more optimistic for the future and are more likely to respond 'Yes; in the survey concerning the UK economy. On the other hand, older people seem to be more pessimistic and suspicious about the future so are more likely to repond no to the same question. The analysis was done over the course of the question clearly shows this trend as the probabilities increase with the age. The Bayisian prediction we made here reveals that 99% of people aged 18 are going to respond "Yes" to this question with a very small standard deviation while people age 50 are more likely to respond "No". However, the standard deviation for older people seems to be much greater than for younger people which means that this is different may be explained by other parameters when we are considering about olders people thoughts.
+
+
+### Suggestion and recommndations about future survey and why older people are generally more or less pessimistic than younger people about what will happen to the economy in the next 12 months.
+
+Following our conclusion from the last question we need to include some other variables in our dataset to ensure that we cover other factors, such as the education level of the respondents, which may affect the results. Another possible factor could be the income or social group of the respondents, again which may influence their optimism. Essentially, we need more _quality characteristics_ of the population we are studying in order to make more accurate analysis.
+
+In addition, the use of a closed, binary question on the questionnaire may not reveal the extent to which individuals agree or disagree with a statement. This could be rectified by the use of a likert scale, which allows for a greater number of categories. Alternatively, an open question about what the participant thinks about the economy could be asked, with their answer noted and analysed using sentiment analysis to identify positive and negative words. One of the reasons why older people may be more sceptical about the economy may be because of their experience with past and possibly because of differences in their political leanings.
+
+ 
+
+### We modify our code to provide the posterior median of a 95% credible interval for the age at which:
+\begin{center}
+$p = Pr (Response = 1) = \frac{1}{2}$
+\end{center}
+
+```{r,echo=TRUE , results='hide'}
+Bayesian_binary_logistic_model_predict_xnew <- function(){
+  #
+  # Define the likelihood part of the model
+  #
+  for(i in 1:n_obs){
+    #
+    y[i] ~ dbin(p[i], 1) 
+    #
+    # Link function
+    #
+    # logit(p) in BUGS give log(p / (1 - p))
+    #
+    # Linear predictor
+    #
+    logit(p[i]) <- eta[i]
+    #
+    eta[i]<- beta_0 + beta_1 * x[i]
+  }
+  #
+  # Specify the prior distributions on the unknown parameters
+  #
+  beta_0 ~ dnorm(0.0, 1.0E-4) # Prior on beta_0 is normal with low precision
+  beta_1 ~ dnorm(0.0, 1.0E-4) # Prior on beta_1 is normal with low precision
+  #
+  # Evaluate the linear predictor at the new value of Dose, called x_new
+  #
+  eta_new <- logit(p_new)
+  x_new <- (eta_new - beta_0) / beta_1
+  
+}
+```
+
+- I order to input initial values to $\beta_0$, and $\beta_1$ we create a function name __beta_inits__ and we load in the __jags__ function:
+
+```{r , echo=TRUE , results=TRUE}
+# we include the function beta_inits in order to give the initial values for the 
+# slope and intecept
+beta_inits <- function(){
+  list("beta_0"=0.0001,"beta_1"=0.0001)
+}
+```
+
+```{r , echo= FALSE , results='hide'}
+# *** Data Preparation ***
+#
+n_obs <- length(survey$age)
+n_obs
+#
+y <- survey$responce_prob
+y
+#
+x <- survey$age
+#
+
+p_new <- 0.5
+
+
+
+# load the data 
+data_binary_logistic3 <-  list("n_obs", "y", "x", "p_new")
+ # Make the sumulation 
+Bayesian_binary_logistic_predict_xnew <- jags(data = data_binary_logistic3, 
+                                              inits = beta_inits,# incluting the initial values
+                                              parameters.to.save = c("x_new",
+                                                                     "beta_1",
+                                                                     "beta_0"), 
+                                              n.iter = 100000, 
+                                              n.chains = 3,
+                                              
+                                              model.file = Bayesian_binary_logistic_model_predict_xnew)
+
+```
+
+```{r, echo = FALSE, results=TRUE,fig.height= 5,fig.width=12}
+
+Bayesian_binary_logistic_predict_xnew.mcmc <- as.mcmc(Bayesian_binary_logistic_predict_xnew)
+#
+# Convert this to a ggs object
+#
+#
+Bayesian_binary_logistic_predict_xnew.ggs <- ggs(Bayesian_binary_logistic_predict_xnew.mcmc)
+
+ggs_caterpillar(Bayesian_binary_logistic_predict_xnew.ggs,thick_ci = c(0.05, 0.95),family = "^x_new")
+```
+
+We can see that the age with proportion up to 50% of answers are close to the mean of the age of our data set. This result is consistent with the limitations discussed above and we could not make many explicit assumptions about the data. We observed very big credible intervals when age is lower than 46 years old, the credible interval length is lower when the age is greater than 46 years old, which implies there is generally more consensus amongst older people, We also found that the thick intervals are greater when $x<46$ and lower when $x>46$. Because we have slightly more observations for younger people this might be a reason for the grater intervals for the older people, as we know larger sample sizes are associated with more confidence in our findings. 
+
+\newpage
+# References
+
+```{r generateBibliography, echo=FALSE, eval=TRUE,comment=NA , message=FALSE, warning=FALSE}
+library(RefManageR)
+## loading some bib entries from example file
+file <- system.file("Bib", "MathRep.bib", package = "RefManageR")
+BibOptions(check.entries = FALSE)
+bib <- ReadBib(file= "MathRep.bib",.Encoding = "UTF-8",header = if (length(preamble))
+  paste(preamble, sep = "\n") else "", footer = "",
+  check = BibOptions()$check.entries)
+NoCite(bib)
+PrintBibliography(bib, .opts = list(style = "text", bib.style = "authoryear", sorting = "ydnt"))
+```
+
+

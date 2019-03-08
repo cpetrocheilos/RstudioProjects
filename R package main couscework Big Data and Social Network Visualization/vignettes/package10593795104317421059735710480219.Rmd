@@ -1,0 +1,305 @@
+---
+title: "MATH500 Big Data and Social Network Visualization Coursework: Group Report"
+author: "Julian Blau, Dan Buckwell, Clint Cridland & Charalampos Petrocheilos"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+vignette: |
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, echo=FALSE, results='hide', message=FALSE, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(ukbabynames)
+```
+
+# Introduction
+The 2016 referendum to leave the European Union in the United Kingdom was one of the most significant political events of the decade A considerable amount of time has been dedicated to breaking down the results of the referendum by voter demographics. The aim of this package is to create a sophisticated graph of EU Referendum results against diversity data, with unique name percentage as a proxy for diversity. Furthermore, due to the stochastic nature of baby names, we have further decomposed them in the package by visualising a large dataset of UK baby names over time. 
+
+
+
+# EU Referendum Data
+
+## EU Referendum Data Plot
+
+```{r, echo=FALSE, fig.width = 7.25, fig.height = 5, fig.align="center"}
+referendum_data <- package10593795104317421059735710480219::referendum_data %>%
+    mutate(total_voters = Votes_Remain + Votes_Leave,
+           remain_p = Votes_Remain / total_voters,
+           leave_p = Votes_Leave / total_voters)
+  referendum_data = referendum_data[, c(1:4, 9, 5, 10, 8, 6, 7)]
+
+
+  ggplot(referendum_data, aes(
+    x = Diversity_Score,
+    y = leave_p,
+    color = Country)) +
+    geom_point(aes(
+      size = total_voters),
+      alpha = 0.35) +
+    stat_smooth(
+      method = "lm",
+      se = FALSE,
+      color = "YELLOW") +
+    scale_size(
+      name = waiver(),
+      breaks = c(100000, 200000, 300000, 400000),
+      labels = c("100,000", "200,000", "300,000", "400,000"),
+      limits = NULL,
+      range = c(1, 6),
+      trans = "identity",
+      guide = "legend") +
+    facet_wrap(~ Country) +
+    geom_hline(yintercept = 0.50) +
+    scale_x_log10(
+      labels = scales::percent,
+      breaks = c(.01,.02,.05,.10,.25)) +
+    scale_y_continuous(
+      labels = scales::percent,
+      breaks = seq(0.00, 0.80, by = 0.10),
+      limits = c(0.00, 0.80)) +
+    scale_color_manual(values = c('red','blue','green')) +
+    guides(color = guide_legend(override.aes = list(size = 6))) +
+    labs(
+      x = "Percentage with Unique Surnames (using a logarithmic scale)",
+      y = "Percentage Voting Leave",
+      size="Votes Cast",
+      title="The representation of leave votes to district diversity")
+```
+
+## EU Referendum Code
+
+```{r, eval=FALSE}
+referendum_data <- package10593795104317421059735710480219::referendum_data %>%
+    mutate(total_voters = Votes_Remain + Votes_Leave,
+           remain_p = Votes_Remain / total_voters,
+           leave_p = Votes_Leave / total_voters)
+  referendum_data = referendum_data[, c(1:4, 9, 5, 10, 8, 6, 7)]
+
+
+  ggplot(referendum_data, aes(
+    x = Diversity_Score,
+    y = leave_p,
+    color = Country)) +
+    geom_point(aes(
+      size = total_voters),
+      alpha = 0.35) +
+    stat_smooth(
+      method = "lm",
+      se = FALSE,
+      color = "YELLOW") +
+    scale_size(
+      name = waiver(),
+      breaks = c(100000, 200000, 300000, 400000),
+      labels = c("100,000", "200,000", "300,000", "400,000"),
+      limits = NULL,
+      range = c(1, 6),
+      trans = "identity",
+      guide = "legend") +
+    facet_wrap(~ Country) +
+    geom_hline(yintercept = 0.50) +
+    scale_x_log10(
+      labels = scales::percent,
+      breaks = c(.01,.02,.05,.10,.25)) +
+    scale_y_continuous(
+      labels = scales::percent,
+      breaks = seq(0.00, 0.80, by = 0.10),
+      limits = c(0.00, 0.80)) +
+    scale_color_manual(values = c('red','blue','green')) +
+    labs(
+      x = "Percentage with Unique Surnames (using a logarithmic scale)",
+      y = "Percentage Voting Leave",
+      size="Votes Cast",
+      title="The relationship between the percentage 
+      voting to leave the EU and the percentage with unique surnames")
+
+```
+
+
+
+In this plot, we have represented the proportion of individuals who have voted to leave the European Union. In order to sort the dataset by those who voted leave and voted remain, we created a function called __referendum_diversity()__, shown below, and we have counted the total number of voters to use as a vote cast:
+
+```{r, eval=FALSE}
+referendum_diversity <- function(){
+
+  referendum_data <- referendum_data %>%
+    mutate(total_voters = Votes_Remain + Votes_Leave,
+           remain_p = Votes_Remain / total_voters,
+           leave_p = Votes_Leave / total_voters)
+  referendum_data = referendum_data[, c(1:4, 9, 5, 10, 8, 6, 7)]
+}
+```
+
+From the plot, we can observe the following:
+* There is an inverse relationship between voting leave and the diversity score of the district. Districts with higher diversity were more likely to vote Remain, evidenced by the downwards gradient observed.
+
+* The gradient is steepest in England, indicating that this relationship is most pronounced in this country, as there is a greater level of diversity.
+
+* The gradient for Wales is similar to that in England, albeit with a less diverse population. 
+
+* The gradient for Scotland is the most shallow, and uniquely has proportionally fewer voters who voted leave. However, there was greater variablity in the Scottish districts.
+
+* Heteroscedasticity was present in the English districts, where there was a difference in the level of variability across the plot. For areas of low diversity there was greater variability than for areas of high diversity.
+
+* England has proportionally more voters voting to leave.
+
+* Wales has roughly the same proportion of voters voting to leave as England, albeit with fewer observations reflecting the lower number of voting districts.
+
+
+
+# UK Baby Names
+
+## Compare Names Plot
+```{r, echo=FALSE, fig.width = 7.25, fig.height = 5, fig.align="center"}
+#package10593795104317421059735710480219::compare_names(c("Alex", "Sam"))
+```
+We designed the __compare_names()__ function to visualise the proportion of babies with a given name over the period 1996 - 2015. Using this function, the user is able to specify one, or multiple names, with each being displayed on a separate graph. In order to differentiate between sex, unisex names are plotted using two lines, to represent both males and females.
+
+## Compare Names Code
+```{r, eval=FALSE}
+get_proportion <- function(data_set){
+  
+  names_with_proportion <- data_set %>%
+    group_by(year, sex) %>%
+    mutate(p = n / sum(n))
+  
+  return(names_with_proportion)
+```
+
+To create this function, a helper function was made, called __get_proportion()__. This function calculates the proportion of babies of a given sex in a given year with the specified name. This allows us to visualise the trend over the time period. With this data, we were able to use a combination of the R _subset_ function and the _%ini%_ operator. This combined with the sequence of names passed as arguments to the function allowed us to create a data set containing only the names specified. Although this function is used by the __compare_names()__ function, it is hidden from the user. This desicion was made as users would have not use for the data outside of the parent function.
+
+```{r, eval=FALSE}
+compare_names <- function(given_names){
+
+  names_to_plot <- get_proportion(ukbabynames::ukbabynames)
+
+  names_to_plot <- subset(names_to_plot, names_to_plot$name %in% given_names)
+
+  ggplot(names_to_plot, aes(
+      x = year,
+      y = p,
+      colour = factor(sex))) +
+    geom_point() +
+    geom_line() +
+    geom_smooth(fill = NA, method = "loess") +
+    facet_wrap(~name,
+      scales = "free") +
+    theme(
+      legend.position = "bottom") +
+    labs(
+      title = paste("Babies' names in the UK, 1996 - 2015"),
+         subtitle = "Data from the R package ukbabynames",
+         x = "Year",
+         y = "Proportion of babies having the given name",
+         colour = "Sex") +
+    scale_y_continuous(labels = scales::percent)
+```
+From the above plot, we can see that the individual names "Alex" and "Sam" have been declining in popularity since 1996. This hypothesis is backed up by the data visualised in the __name_variation()__ function, which shows an overall increase in the number of unique surnames within the population. However, this trend does not account for all names in the data set, as others such as "Julian" and "Max" show an overall increase in popularity over the same period.
+
+
+
+## Name Variation Plot
+```{r, echo=FALSE, fig.width = 7.25, fig.height = 5, fig.align="center"}
+  number_names_per_year <- ukbabynames::ukbabynames %>%
+    group_by(year, sex) %>%
+    select(year, sex) %>%
+    count(sex)
+
+  ggplot(number_names_per_year,
+         aes(x = year,
+             y = n,
+             group = sex,
+             colour = sex)) +
+    geom_point() +
+    geom_line(aes(linetype = sex, color = sex)) +
+    scale_x_continuous(breaks = seq(1995, 2015, by = 5), minor_breaks = seq(1995, 2015, 1),  limits= c(1995.5, 2015.5)) +
+    scale_y_continuous(breaks = seq(3000, 8000, by = 1000), limits = c(3000.5, 8000.5)) +
+    labs(x = "Year",
+         y = "Number of Different Names",
+         title = "Number of different babies' names in the UK, 1996 - 2015",
+         subtitle = "Data from the R package ukbabynames") +
+    theme(legend.position = "bottom")
+```
+
+Looking at the graph above, it can be said that the variety of female baby names has increased in the timeframe between 1995 to 2015. Additionally, it can be seen that the variety of different baby names increased fairly similar for male and female baby names throughout the given time period. Both data sets reach their maximum values in 2012 and simultaneously drop in the year 2013. Overall it can be said that both data sets have a similar growth trend.
+
+
+
+## Name Variation Code
+```{r, eval=FALSE}
+name_variation <- function(){
+ 
+  number_names_per_year <- ukbabynames::ukbabynames %>%
+    group_by(year, sex) %>%
+    select(year, sex) %>%
+    count(sex)
+  
+  ggplot(number_names_per_year,
+         aes(x = year,
+             y = n,
+             group = sex,
+             colour = sex)) +
+    geom_point() +
+    geom_line(aes(linetype = sex, color = sex)) +
+    scale_x_continuous(breaks = seq(1995, 2015, by = 5), minor_breaks = seq(1995, 2015, 1),  
+                       limits= c(1995.5, 2015.5)) +
+    scale_y_continuous(breaks = seq(3000, 8000, by = 1000), limits = c(3000.5, 8000.5)) +
+    
+    labs(x = "Year",
+         y = "Number of Different Names",
+         title = "Number of different babies' names in the UK, 1996 - 2015",
+         subtitle = "Data from the R package ukbabynames") +
+    theme(legend.position = "bottom")
+}
+```
+
+For this rPackage, the function __name_variation()__ was created that allows the user to display the number of different baby names for a given data set. To plot the above presented graph a new data frame was created. This dataset includes the grouped variables year and sex from the ukbabynames dataset, followed by a count of the sex variable that gives us the number of different names per sex for each year. The new dataframe _number_names_per_year_ was then plotted using ggplot. The x-axis values were set to years and the y-axis values to the number of different baby names. Adjustments were made to both x and y axis scales to properly represent the two graphs. 
+
+
+## Entropy Baby Name Plot
+```{r, echo=FALSE, fig.width = 7.25, fig.height = 5, fig.align="center"}
+package10593795104317421059735710480219::name_entropy()
+```
+In the sample, the population size increased, while the number of individual names increases over time. The net result of this was an increase in the level of entropy, as with every additional person born the level of diversity of the sample increases. The plot shown is characterised by a concave curve, where the rate at which entropy increases decreases over time, which is consistent with
+an entropy function. 
+
+
+## Entropy Baby Name Code
+```{r}
+entropy <- function(p){
+  e <- -sum(p * log(p, base = 2))
+  return(e)
+}
+```
+To create the above plot, we needed to create another helper function called __entropy()__, to calculate the entropy for each name. The entropy value is used as an identifier of the probabilty a name will occur each year for each sex. We calculate the entropy by using the dplyr functions _group_by_ and _summarise_ in order to make use of the entropy function, which has been given within the coursework paper. As with __get_proportion()__, the __entropy()__ function is also hidden from users.
+
+
+```{r, eval=FALSE}
+name_entropy <- function(){
+
+  entropy_data <- get_proportion(ukbabynames::ukbabynames)
+  
+  entropy_data <- entropy_data %>%
+    group_by(year, sex) %>%
+    summarise(entropy = entropy(p))
+
+    ggplot(entropy_data, aes(
+    x = year,
+    y = entropy,
+    color = sex)) +
+    geom_point() +
+    geom_line(aes(linetype = sex, color = sex)) +
+    labs(x = "Year",
+         y = "Entropy as a measure of diversity",
+         title = "Entropy of babies' names in the UK, 1996 - 2015",
+         subtitle = "Data from the R package ukbabynames") +
+    theme(legend.position = "bottom")
+}
+```
+
+The __name_entropy()__ function uses the __get_proportion()__ function in order to extract the data frame with the proportions and save it to the data frame entropy_data, using the __entropy()__ function. The last step was to use the _entropy_data_ data frame to visualize the result on a graph, showing separated plots for both male and female data. The plot produced shows similar trends to the plot produced using the __name_variation()__ function, confirming that the variation and entropy trends are linked.
